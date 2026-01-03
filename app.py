@@ -1,6 +1,6 @@
 # ===============================
 # TELEGRAM RTMP STREAM BOT
-# Free Plan • Stable • Auto CPU • 4-Day Alert
+# Katabump Free • Stable • Auto CPU • No Logs • 4-Day Alert
 # ===============================
 
 import os, signal, asyncio, subprocess, json, logging, time
@@ -23,7 +23,7 @@ from telegram.ext import (
 # -------------------------------
 BOT_TOKEN = "PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE"
 PORT = 8080
-CPU_LIMIT = 22  # Katabump Free safe
+CPU_LIMIT = 22  # safe for 25% CPU plan
 
 BASE = Path(".")
 STORAGE = BASE / "storage"
@@ -56,6 +56,14 @@ def load_cfg(cid):
 def save_cfg(cid, d):
     cfg_path(cid).write_text(json.dumps(d))
 
+def cleanup_logs(cid):
+    d = cdir(cid)
+    for f in d.glob("*.log"):
+        try:
+            f.unlink()
+        except:
+            pass
+
 # -------------------------------
 # COMMANDS
 # -------------------------------
@@ -86,12 +94,10 @@ async def set_stream(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     cfg = load_cfg(update.effective_chat.id)
     cfg["key"] = ctx.args[0]
-
-    # 4-day timer start
     cfg["renew_time"] = time.time()
     cfg["alert_sent"] = False
-
     save_cfg(update.effective_chat.id, cfg)
+
     await update.message.reply_text("✅ Stream key saved\n⏰ 4-day timer started")
 
 async def set_backup(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -150,7 +156,7 @@ async def restore_video(cid):
     )
 
 # -------------------------------
-# FFMPEG PROFILES
+# FFMPEG PROFILES (NO LOGS)
 # -------------------------------
 def ffmpeg_cmd(v, rtmp, level):
     if level == "LOW":  # 240p SAFE
@@ -179,6 +185,8 @@ async def start_stream(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     cid = update.effective_chat.id
     if cid in ACTIVE and ACTIVE[cid].poll() is None:
         return await update.message.reply_text("⚠️ Already live")
+
+    cleanup_logs(cid)
 
     cfg = load_cfg(cid)
     if "key" not in cfg:
@@ -210,6 +218,7 @@ async def auto_quality(cid, v, rtmp):
         target = "LOW" if cpu > CPU_LIMIT else "MED"
 
         if QUALITY.get(cid) != target:
+            cleanup_logs(cid)
             try:
                 os.killpg(os.getpgid(ACTIVE[cid].pid), signal.SIGTERM)
             except:
@@ -230,6 +239,7 @@ async def stop_stream(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not p:
         return await update.message.reply_text("⚠️ Not running")
 
+    cleanup_logs(cid)
     try:
         os.killpg(os.getpgid(p.pid), signal.SIGTERM)
     except:
@@ -248,7 +258,7 @@ async def status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 # -------------------------------
-# 4-DAY RENEW ALERT
+# 4-DAY RENEW ALERT (DAY-3)
 # -------------------------------
 async def renew_alert_task(app):
     while True:
