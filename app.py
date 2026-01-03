@@ -1,190 +1,138 @@
-# ==================================================
-# KATABUMP FREE RTMP BOT – FINAL v2 (4-DAY SAFE)
-# Auto Start • Auto Restore • Auto Restart • GitHub
-# ==================================================
+# ===============================
+# TELEGRAM RTMP STREAM BOT
+# Free Plan • Stable • Auto CPU • 4-Day Alert
+# ===============================
 
-import os, json, signal, asyncio, subprocess, time, logging
+import os, signal, asyncio, subprocess, json, html, logging, time
 from pathlib import Path
+from collections import deque
 
-import psutil, gdown
 from aiohttp import web
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import gdown, psutil
+
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
-    CallbackQueryHandler,
+    MessageHandler,
     ContextTypes,
+    filters
 )
 
-# ---------------- BASIC CONFIG ----------------
-BOT_TOKEN = "8278727216:AAGhf2yRZrNx3DVPS5rfmKRmPqNJqwwm9C8"
-ADMIN_ID = 7176592290
+# -------------------------------
+# BASIC CONFIG
+# -------------------------------
+BOT_TOKEN = "PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE"
 PORT = 8080
-
-QUALITY = {
-    "scale": "640:360",   # FREE SAFE
-    "fps": "20",
-    "vb": "550k",
-    "ab": "64k",
-}
+CPU_LIMIT = 22  # safe for Katabump Free
 
 BASE = Path(".")
-STORE = BASE / "storage"
-STORE.mkdir(exist_ok=True)
+STORAGE = BASE / "storage"
+STORAGE.mkdir(exist_ok=True)
 
-ACTIVE = {}
+VIDEO_EXT = {".mp4", ".mkv", ".mov"}
+AUDIO_EXT = {".mp3", ".aac", ".wav", ".m4a"}
+MAX_SIZE = 200 * 1024 * 1024
+
 logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("RTMP")
 
-# ---------------- HELPERS ----------------
-def is_admin(update: Update):
-    return update.effective_user and update.effective_user.id == ADMIN_ID
+ACTIVE = {}    # chat_id -> ffmpeg process
+QUALITY = {}   # chat_id -> LOW / MED
 
-def cdir(cid: int):
-    p = STORE / str(cid)
+# -------------------------------
+# HELPERS
+# -------------------------------
+def cdir(cid):
+    p = STORAGE / str(cid)
     p.mkdir(exist_ok=True)
     return p
 
-def cfgp(cid: int):
-    return cdir(cid) / "cfg.json"
+def cfg_path(cid):
+    return cdir(cid) / "config.json"
 
-def load_cfg(cid: int):
-    return json.loads(cfgp(cid).read_text()) if cfgp(cid).exists() else {}
+def load_cfg(cid):
+    return json.loads(cfg_path(cid).read_text()) if cfg_path(cid).exists() else {}
 
-def save_cfg(cid: int, d: dict):
-    cfgp(cid).write_text(json.dumps(d))
+def save_cfg(cid, d):
+    cfg_path(cid).write_text(json.dumps(d))
 
-def cleanup(cid: int):
-    """Auto disk cleanup (logs)"""
-    d = cdir(cid)
-    for f in d.glob("*.log"):
-        if f.stat().st_size > 5 * 1024 * 1024:
-            f.unlink(missing_ok=True)
-
-# ---------------- BASIC COMMANDS ----------------
+# -------------------------------
+# COMMANDS
+# -------------------------------
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🚀 Katabump RTMP Bot v2\n"
-        "/panel\n/help\n/status\n/stats"
+        "🎥 RTMP Live Bot\n\n"
+        "/set_stream <YT_KEY>\n"
+        "/set_backup <GDRIVE_LINK>\n"
+        "/start_stream\n"
+        "/stop_stream\n"
+        "/status\n"
+        "/help"
     )
 
 async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "📖 HELP (Short)\n\n"
-        "/setkey KEY\n"
-        "/setbackup GDRIVE\n"
-        "/autostart\n"
-        "/start\n"
-        "/stop\n"
-        "/panel\n\n"
-        "Notes:\n"
-        "• Free plan: 360p\n"
-        "• Single live only\n"
-        "• Renew every 4 days"
+        "📘 COMMANDS\n\n"
+        "/set_stream  → YouTube key\n"
+        "/set_backup  → Google Drive video\n"
+        "/start_stream → Start live\n"
+        "/stop_stream  → Stop live\n"
+        "/status       → CPU / Quality\n"
     )
 
-async def status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if ACTIVE:
-        cpu = psutil.cpu_percent()
-        await update.message.reply_text(
-            f"✅ LIVE\nCPU {cpu}%\nQuality 360p"
-        )
-    else:
-        await update.message.reply_text("💤 Offline")
+async def set_stream(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.args:
+        return await update.message.reply_text("Usage: /set_stream YT_KEY")
 
-async def stats(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    cpu = psutil.cpu_percent(interval=1)
-    ram = psutil.virtual_memory().used // (1024 * 1024)
-    await update.message.reply_text(f"CPU {cpu}%\nRAM {ram} MB")
-
-# ---------------- ADMIN PANEL ----------------
-async def panel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return
-    kb = [
-        [
-            InlineKeyboardButton("▶", callback_data="go"),
-            InlineKeyboardButton("■", callback_data="stop"),
-        ],
-        [InlineKeyboardButton("📊", callback_data="stats")],
-    ]
-    await update.message.reply_text(
-        "🎛 Admin Panel",
-        reply_markup=InlineKeyboardMarkup(kb),
-    )
-
-async def panel_cb(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-
-    fake = Update(
-        update.update_id,
-        message=q.message,
-        effective_user=q.from_user,
-        effective_chat=q.message.chat,
-    )
-
-    if q.data == "go":
-        await start_stream(fake, None)
-    elif q.data == "stop":
-        await stop_stream(fake, None)
-    elif q.data == "stats":
-        await stats(fake, None)
-
-# ---------------- SETUP COMMANDS ----------------
-async def setkey(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update) or not ctx.args:
-        return
-    cid = update.effective_chat.id
-    cfg = load_cfg(cid)
+    cfg = load_cfg(update.effective_chat.id)
     cfg["key"] = ctx.args[0]
-    save_cfg(cid, cfg)
-    await update.message.reply_text("✅ KEY OK")
 
-async def setbackup(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update) or not ctx.args:
-        return
-    cid = update.effective_chat.id
-    cfg = load_cfg(cid)
-    cfg["gdrive"] = ctx.args[0]
-    save_cfg(cid, cfg)
-    await update.message.reply_text("✅ BACKUP OK")
-
-async def autostart(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return
-    cid = update.effective_chat.id
-    cfg = load_cfg(cid)
-    cfg["auto"] = time.time()
+    # 4-day timer start
     cfg["renew_time"] = time.time()
-    save_cfg(cid, cfg)
-    await update.message.reply_text("✅ AUTO ON")
+    cfg["alert_sent"] = False
 
-# ---------------- STREAM CORE ----------------
-async def watch_stream(cid: int, update: Update):
-    """Auto-restart on drop (with limit)"""
-    while True:
-        await asyncio.sleep(10)
-        p = ACTIVE.get(cid)
-        if not p:
-            return
-        if p.poll() is not None:
-            ACTIVE.pop(cid, None)
-            cfg = load_cfg(cid)
-            cfg["restarts"] = cfg.get("restarts", 0) + 1
-            save_cfg(cid, cfg)
+    save_cfg(update.effective_chat.id, cfg)
+    await update.message.reply_text("✅ Stream key saved\n⏰ 4-day timer started")
 
-            if cfg["restarts"] > 5:
-                await update.message.reply_text("❌ Too many restarts, stopped")
-                return
+async def set_backup(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.args:
+        return await update.message.reply_text("Usage: /set_backup GDRIVE_LINK")
 
-            await update.message.reply_text("⚠️ Dropped → Restarting")
-            await start_stream(update, None)
-            return
+    cfg = load_cfg(update.effective_chat.id)
+    cfg["backup"] = ctx.args[0]
+    save_cfg(update.effective_chat.id, cfg)
 
-async def restore_video(cid: int):
-    """Auto restore video from Google Drive"""
+    await update.message.reply_text("✅ Google Drive backup saved")
+
+# -------------------------------
+# FILE UPLOAD
+# -------------------------------
+async def upload_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    m = update.message
+    f = m.video or m.audio or m.document
+    if not f or f.file_size > MAX_SIZE:
+        return
+
+    ext = Path(f.file_name or "").suffix.lower()
+    if ext in VIDEO_EXT:
+        out = cdir(m.chat.id) / "video.mp4"
+    elif ext in AUDIO_EXT:
+        out = cdir(m.chat.id) / "audio.mp3"
+    else:
+        return
+
+    tf = await f.get_file()
+    await tf.download_to_drive(out)
+    await m.reply_text("✅ File saved")
+
+# -------------------------------
+# GOOGLE DRIVE RESTORE
+# -------------------------------
+async def restore_video(cid):
     cfg = load_cfg(cid)
-    if "gdrive" not in cfg:
+    link = cfg.get("backup")
+    if not link:
         return
 
     v = cdir(cid) / "video.mp4"
@@ -192,141 +140,177 @@ async def restore_video(cid: int):
         return
 
     if v.exists():
-        v.unlink(missing_ok=True)
+        v.unlink()
 
     await asyncio.to_thread(
         gdown.download,
-        cfg["gdrive"],
+        link,
         str(v),
         quiet=False,
-        fuzzy=True,
+        fuzzy=True
     )
 
-async def start_stream(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return
+# -------------------------------
+# FFMPEG PROFILES
+# -------------------------------
+def ffmpeg_cmd(v, rtmp, level):
+    if level == "LOW":  # 240p SAFE
+        return [
+            "ffmpeg","-re","-stream_loop","-1","-i",str(v),
+            "-c:v","libx264","-preset","ultrafast","-threads","1",
+            "-vf","scale=426:240","-r","15",
+            "-b:v","350k","-maxrate","350k","-bufsize","700k",
+            "-c:a","aac","-b:a","48k","-ar","22050",
+            "-f","flv",rtmp
+        ]
+    else:               # 360p LIMIT
+        return [
+            "ffmpeg","-re","-stream_loop","-1","-i",str(v),
+            "-c:v","libx264","-preset","ultrafast","-threads","1",
+            "-vf","scale=640:360","-r","20",
+            "-b:v","600k","-maxrate","600k","-bufsize","1200k",
+            "-c:a","aac","-b:a","64k","-ar","32000",
+            "-f","flv",rtmp
+        ]
 
+# -------------------------------
+# STREAM CONTROL
+# -------------------------------
+async def start_stream(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     cid = update.effective_chat.id
-    if ACTIVE:
-        return
+    if cid in ACTIVE and ACTIVE[cid].poll() is None:
+        return await update.message.reply_text("⚠️ Already live")
 
     cfg = load_cfg(cid)
     if "key" not in cfg:
-        return await update.message.reply_text("❌ NO KEY")
+        return await update.message.reply_text("❌ Set stream key first")
 
     await restore_video(cid)
-
     v = cdir(cid) / "video.mp4"
     if not v.exists():
-        return await update.message.reply_text("❌ NO VIDEO")
-
-    cleanup(cid)
+        return await update.message.reply_text("❌ video.mp4 missing")
 
     rtmp = f"rtmp://a.rtmp.youtube.com/live2/{cfg['key']}"
-    logf = open(cdir(cid) / "ffmpeg.log", "w")
 
-    cmd = [
-        "ffmpeg",
-        "-re",
-        "-stream_loop", "-1",
-        "-r", QUALITY["fps"],
-        "-i", str(v),
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-tune", "zerolatency",
-        "-threads", "1",
-        "-vf", f"scale={QUALITY['scale']}",
-        "-b:v", QUALITY["vb"],
-        "-maxrate", QUALITY["vb"],
-        "-bufsize", "1100k",
-        "-g", "40",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-b:a", QUALITY["ab"],
-        "-ar", "44100",
-        "-f", "flv",
-        rtmp,
-    ]
-
+    QUALITY[cid] = "LOW"
     p = subprocess.Popen(
-        cmd,
-        stdout=logf,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
+        ffmpeg_cmd(v, rtmp, "LOW"),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True
     )
     ACTIVE[cid] = p
-    asyncio.create_task(watch_stream(cid, update))
-    await update.message.reply_text("🚀 LIVE")
+
+    asyncio.create_task(auto_quality(cid, v, rtmp))
+    await update.message.reply_text("🚀 Live started (Auto Quality)")
+
+async def auto_quality(cid, v, rtmp):
+    while cid in ACTIVE and ACTIVE[cid].poll() is None:
+        await asyncio.sleep(10)
+        cpu = psutil.cpu_percent()
+        target = "LOW" if cpu > CPU_LIMIT else "MED"
+
+        if QUALITY.get(cid) != target:
+            try:
+                os.killpg(os.getpgid(ACTIVE[cid].pid), signal.SIGTERM)
+            except:
+                pass
+
+            p = subprocess.Popen(
+                ffmpeg_cmd(v, rtmp, target),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            ACTIVE[cid] = p
+            QUALITY[cid] = target
 
 async def stop_stream(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update):
-        return
     cid = update.effective_chat.id
     p = ACTIVE.get(cid)
-    if p:
-        os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-        ACTIVE.clear()
-        await update.message.reply_text("⏹ STOPPED")
+    if not p:
+        return await update.message.reply_text("⚠️ Not running")
 
-# ---------------- RENEW REMINDER ----------------
-async def renew_reminder(app):
+    try:
+        os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+    except:
+        pass
+
+    ACTIVE.pop(cid, None)
+    await update.message.reply_text("⏹ Stopped")
+
+async def status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    cid = update.effective_chat.id
+    cpu = psutil.cpu_percent()
+    q = QUALITY.get(cid, "-")
+    live = cid in ACTIVE and ACTIVE[cid].poll() is None
+    await update.message.reply_text(
+        f"{'LIVE' if live else 'OFF'}\nCPU: {cpu}%\nQuality: {q}"
+    )
+
+# -------------------------------
+# 4-DAY RENEW ALERT
+# -------------------------------
+async def renew_alert_task(app):
     while True:
-        await asyncio.sleep(3600)  # hourly
+        await asyncio.sleep(3600)
         now = time.time()
-        for d in STORE.iterdir():
+
+        for d in STORAGE.iterdir():
             if not d.is_dir():
                 continue
+
             cid = int(d.name)
             cfg = load_cfg(cid)
-            rt = cfg.get("renew_time")
-            if not rt or cfg.get("reminded"):
-                continue
-            if now - rt > 259200:  # 3 days
-                cfg["reminded"] = True
-                save_cfg(cid, cfg)
-                await app.bot.send_message(
-                    ADMIN_ID,
-                    "⚠️ Katabump Free server expires soon.\nRenew before 4 days!",
-                )
 
-# ---------------- KEEP ALIVE + AUTO BOOT ----------------
-async def post_init(app):
-    webapp = web.Application()
-    webapp.router.add_get("/", lambda r: web.Response(text="OK"))
-    runner = web.AppRunner(webapp)
+            rt = cfg.get("renew_time")
+            if not rt or cfg.get("alert_sent"):
+                continue
+
+            if now - rt >= 259200:  # 3 days
+                try:
+                    await app.bot.send_message(
+                        chat_id=cid,
+                        text=(
+                            "⚠️ RENEW ALERT\n\n"
+                            "Server 4 din me delete hoga.\n"
+                            "👉 Abhi naya server bana lo."
+                        )
+                    )
+                except:
+                    pass
+
+                cfg["alert_sent"] = True
+                save_cfg(cid, cfg)
+
+# -------------------------------
+# WEB KEEP ALIVE
+# -------------------------------
+async def start_web(app):
+    w = web.Application()
+    w.router.add_get("/", lambda r: web.Response(text="OK"))
+    runner = web.AppRunner(w)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
 
-    asyncio.create_task(renew_reminder(app))
+async def post_init(app):
+    await start_web(app)
+    asyncio.create_task(renew_alert_task(app))
 
-    await asyncio.sleep(5)
-    for d in STORE.iterdir():
-        if d.is_dir():
-            cid = int(d.name)
-            cfg = load_cfg(cid)
-            if cfg.get("auto") and cfg.get("key"):
-                class Dummy:
-                    effective_chat = type("c", (), {"id": cid})
-                    effective_user = type("u", (), {"id": ADMIN_ID})
-                    message = None
-                await start_stream(Dummy(), None)
-
-# ---------------- MAIN ----------------
+# -------------------------------
+# MAIN
+# -------------------------------
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("set_stream", set_stream))
+    app.add_handler(CommandHandler("set_backup", set_backup))
+    app.add_handler(CommandHandler("start_stream", start_stream))
+    app.add_handler(CommandHandler("stop_stream", stop_stream))
     app.add_handler(CommandHandler("status", status))
-    app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(CommandHandler("panel", panel))
-    app.add_handler(CallbackQueryHandler(panel_cb))
-
-    app.add_handler(CommandHandler("setkey", setkey))
-    app.add_handler(CommandHandler("setbackup", setbackup))
-    app.add_handler(CommandHandler("autostart", autostart))
-    app.add_handler(CommandHandler("start", start_stream))
-    app.add_handler(CommandHandler("stop", stop_stream))
+    app.add_handler(MessageHandler(filters.ALL, upload_handler))
 
     app.run_polling()
 
