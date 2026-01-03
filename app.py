@@ -3,9 +3,8 @@
 # Free Plan • Stable • Auto CPU • 4-Day Alert
 # ===============================
 
-import os, signal, asyncio, subprocess, json, html, logging, time
+import os, signal, asyncio, subprocess, json, logging, time
 from pathlib import Path
-from collections import deque
 
 from aiohttp import web
 import gdown, psutil
@@ -24,7 +23,7 @@ from telegram.ext import (
 # -------------------------------
 BOT_TOKEN = "PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE"
 PORT = 8080
-CPU_LIMIT = 22  # safe for Katabump Free
+CPU_LIMIT = 22  # Katabump Free safe
 
 BASE = Path(".")
 STORAGE = BASE / "storage"
@@ -75,7 +74,7 @@ async def help_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📘 COMMANDS\n\n"
         "/set_stream  → YouTube key\n"
-        "/set_backup  → Google Drive video\n"
+        "/set_backup  → Drive video\n"
         "/start_stream → Start live\n"
         "/stop_stream  → Stop live\n"
         "/status       → CPU / Quality\n"
