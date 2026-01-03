@@ -19,7 +19,7 @@ Telegram-controlled YouTube RTMP bot optimized for **Katabump Free (25% CPU)**.
 
 ## Setup (2 Minutes)
 ```bash
-git clone https://github.com/YOUR_USERNAME/katabump-rtmp-bot
+git clone https://github.com/inyogeshwar/katabump-free-rtmp-bot
 cd katabump-rtmp-bot
 pip install -r requirements.txt
 python app.py
