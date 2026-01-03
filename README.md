@@ -1,31 +1,25 @@
-# Katabump Free RTMP Bot – Final v2
+# Katabump Free YouTube Live Bot
 
-Free-plan optimized YouTube RTMP bot (4-day renew safe).
+Telegram-controlled YouTube RTMP bot optimized for **Katabump Free plan (25% CPU)**.
 
 ## Features
-- Auto start on server boot
-- Auto restore video from Google Drive
-- Auto restart on stream drop
-- Renew reminder (Telegram)
-- Admin panel (buttons)
-- Disk cleanup
-- GitHub safe (no data loss)
+- Auto YouTube Live
+- Auto CPU-based quality (240p ↔ 360p)
+- Google Drive video backup
+- Auto restore after server delete
+- 4-day renew alert (Day-3 warning)
+- Low RAM / Low CPU
 
-## Setup
-1. Create Python server (Katabump Free)
-2. Upload repo files
-3. Start server
+## Requirements
+- Python 3.11
+- ffmpeg installed
+- Telegram Bot Token
+- YouTube Stream Key
+- Google Drive video link
 
-## Telegram Commands
-/setkey YT_KEY  
-/setbackup GDRIVE_LINK  
-/autostart  
-/panel  
-
-## Renew Flow
-Server deleted → new server → git clone → start → auto restore → live
-
-## Katabump
-- Dashboard: https://dashboard.katabump.com/
-- Control: https://control.katabump.com/
-- Status: https://status.katabump.com/
+## Setup (2 Minutes)
+```bash
+git clone https://github.com/YOUR_USERNAME/katabump-rtmp-bot
+cd katabump-rtmp-bot
+pip install -r requirements.txt
+python app.py
