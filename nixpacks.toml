@@ -1,0 +1,20 @@
+# Railway / Render Nixpacks configuration
+# https://nixpacks.com/docs/configuration/file
+
+[phases.setup]
+nixPkgs = ["python311", "ffmpeg"]
+
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  "pip install -r requirements.txt"
+]
+
+[phases.build]
+cmds = [
+  "mkdir -p storage/downloads storage/thumbnails storage/logs",
+  "python -c \"from PIL import Image; img=Image.new('RGB',(1280,720),(20,20,20)); img.save('storage/thumbnails/default_bg.jpg')\" || true"
+]
+
+[start]
+cmd = "python app.py"

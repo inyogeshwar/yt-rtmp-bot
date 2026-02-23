@@ -1,0 +1,39 @@
+# Koyeb deployment configuration
+# https://www.koyeb.com/docs/deploy/git
+
+name: yt-rtmp-bot
+
+services:
+  - name: bot
+    type: worker                  # worker → no HTTP port, long-running process
+    git:
+      branch: main
+    build:
+      builder: docker
+      dockerfile: Dockerfile
+    run:
+      command: "python app.py"
+    instance_type: micro          # micro | small | medium | large
+    regions:
+      - was                       # Washington (was) | Frankfurt (fra) | Singapore (sin) | Tokyo (tyo)
+    scaling:
+      min: 1
+      max: 1                      # Single instance – bot is stateful
+    env:
+      - key: BOT_TOKEN
+        secret: true              # Mark as secret; set value in Koyeb dashboard
+      - key: ADMIN_IDS
+        secret: true
+      - key: DEFAULT_RTMP_URL
+        value: "rtmp://a.rtmp.youtube.com/live2"
+      - key: DEFAULT_QUALITY
+        value: "720"
+      - key: DEFAULT_VIDEO_BITRATE
+        value: "2500k"
+      - key: DEFAULT_AUDIO_BITRATE
+        value: "128k"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    health_checks: []             # No HTTP health check needed for worker

@@ -1,0 +1,14 @@
+# Railway deployment configuration
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "nixpacks"            # Uses nixpacks.toml config
+
+[deploy]
+startCommand = "python app.py"
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+# Environment variables are set in Railway dashboard
+# Required: BOT_TOKEN, ADMIN_IDS
+# Optional: all others (have defaults in config.py)

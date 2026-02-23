@@ -1,3 +1,45 @@
-storage/
-*.log
+# Environment
+.env
+*.env
+
+# Storage (downloads, logs, db)
+storage/downloads/
+storage/logs/
+storage/*.db
+storage/*.db-wal
+storage/*.db-shm
+
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker overrides
+docker-compose.override.yml
+
+# Credentials
+credentials.json
+token.json
