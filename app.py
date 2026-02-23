@@ -24,7 +24,7 @@ from telegram.ext import (
 # -------------------------------
 # CONFIG
 # -------------------------------
-BOT_TOKEN = "8278727216:AAG6qnO6rsHlDxmtghbEBBoYBCnd9_C49f8"
+BOT_TOKEN = "your-token"
 PORT = 8080
 
 BASE = Path(".")
