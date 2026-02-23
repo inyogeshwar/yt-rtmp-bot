@@ -1,4 +1,5 @@
-python-telegram-bot==20.*
+python-telegram-bot==20.8
+yt-dlp
 aiohttp
 psutil
 gdown
