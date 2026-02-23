@@ -1,0 +1,35 @@
+{
+  "name": "YT RTMP Bot",
+  "description": "Advanced Telegram bot for media streaming and processing.",
+  "keywords": ["telegram", "bot", "rtmp", "youtube", "ffmpeg", "streaming"],
+  "repository": "https://github.com/inyogeshwar/yt-rtmp-bot",
+  "env": {
+    "BOT_TOKEN": {
+      "description": "Your Telegram Bot Token from @BotFather",
+      "required": true
+    },
+    "ADMIN_IDS": {
+      "description": "Comma separated list of Telegram User IDs who can use the bot",
+      "required": true
+    },
+    "DEFAULT_RTMP_URL": {
+      "description": "Default RTMP URL for streaming",
+      "value": "rtmp://a.rtmp.youtube.com/live2",
+      "required": false
+    }
+  },
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "eco"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku-community/apt"
+    },
+    {
+      "url": "heroku/python"
+    }
+  ]
+}

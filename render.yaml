@@ -1,0 +1,36 @@
+# Render deployment configuration
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: worker                    # background worker – no HTTP port needed
+    name: yt-rtmp-bot
+    runtime: docker                 # Use Dockerfile for ffmpeg support
+    dockerfilePath: ./Dockerfile
+    plan: starter                   # starter | standard | pro
+    region: oregon                  # oregon | frankfurt | singapore | ohio
+
+    # Persistent disk for SQLite DB + downloaded files
+    disk:
+      name: bot-storage
+      mountPath: /app/storage
+      sizeGB: 10
+
+    envVars:
+      - key: BOT_TOKEN
+        sync: false                 # secret – set in Render dashboard
+      - key: ADMIN_IDS
+        sync: false
+      - key: DEFAULT_RTMP_URL
+        value: rtmp://a.rtmp.youtube.com/live2
+      - key: DEFAULT_QUALITY
+        value: "720"
+      - key: DEFAULT_VIDEO_BITRATE
+        value: 2500k
+      - key: DEFAULT_AUDIO_BITRATE
+        value: 128k
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+    autoDeploy: false               # Set to true for auto-deploy on push
