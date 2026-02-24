@@ -45,7 +45,11 @@ else
 fi
 
 info "Installing Python dependencies…"
-pip install -r "$INSTALL_DIR/requirements.txt" -q
+if [ -f "$INSTALL_DIR/requirements.txt" ]; then
+    pip install -r "$INSTALL_DIR/requirements.txt" -q
+else
+    error "requirements.txt not found in $INSTALL_DIR"
+fi
 
 # ── Environment file ──────────────────────────────────────────────────────────
 if [ ! -f "$INSTALL_DIR/.env" ]; then
@@ -54,6 +58,7 @@ if [ ! -f "$INSTALL_DIR/.env" ]; then
 fi
 
 # ── Default background image ──────────────────────────────────────────────────
+mkdir -p "$INSTALL_DIR/storage/thumbnails"
 python3 -c "
 try:
     from PIL import Image

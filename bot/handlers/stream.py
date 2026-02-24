@@ -72,6 +72,8 @@ async def cmd_start_stream(message: Message, command: CommandObject, is_admin: b
         return
 
     file_path = candidate
+    
+    rtmp_cfg = await _db.get_rtmp(uid)
     if not rtmp_cfg:
         await message.answer("⚠️ No RTMP config. Use /set\\_rtmp first.", parse_mode="Markdown")
         return
@@ -89,7 +91,7 @@ async def cmd_start_stream(message: Message, command: CommandObject, is_admin: b
         vbitrate=vbitrate,
         abitrate=DEFAULT_AUDIO_BITRATE,
         loop_mode=loop,
-        title=Path(file_path_str).name,
+        title=file_path.name,
     )
 
     bot = message.bot
@@ -101,7 +103,7 @@ async def cmd_start_stream(message: Message, command: CommandObject, is_admin: b
         sess = await stream_manager.start(
             session_id=session_id,
             user_id=uid,
-            input_path=file_path_str,
+            input_path=str(file_path),
             rtmp_url=rtmp_cfg["rtmp_url"],
             stream_key=rtmp_cfg["stream_key"],
             quality=quality,

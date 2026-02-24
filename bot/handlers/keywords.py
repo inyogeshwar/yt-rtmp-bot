@@ -165,7 +165,8 @@ async def handle_keyword(message: Message, is_admin: bool = False) -> None:
                 f"Format   : {info.format_name}",
             ]
             if info.has_video:
-                lines.append(f"Video    : {info.width}x{info.height} @ {info.fps:.1f}fps  ({info.video_codec})")
+                fps_str = f" @ {info.fps:.1f}fps" if info.fps is not None else ""
+                lines.append(f"Video    : {info.width}x{info.height}{fps_str}  ({info.video_codec})")
             if info.has_audio:
                 lines.append(f"Audio    : {info.audio_codec}  {info.sample_rate}Hz  {info.channels}ch")
             await message.answer("\n".join(lines), parse_mode="Markdown")

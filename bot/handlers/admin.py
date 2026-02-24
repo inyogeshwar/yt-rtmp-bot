@@ -25,7 +25,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
 from bot.database import db as _db
-from bot.utils.security import is_admin, mask_key
+from bot.utils.security import mask_key
 from config import ADMIN_IDS
 
 logger = logging.getLogger(__name__)
