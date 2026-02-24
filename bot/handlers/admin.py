@@ -247,14 +247,22 @@ async def cmd_broadcast(
         rows = await cur.fetchall()
     text    = command.args.strip()
     success = 0
+    failed  = 0
     bot     = message.bot
+    import asyncio
+    import logging
+    logger = logging.getLogger(__name__)
+
     for row in rows:
+        uid = row["id"]
         try:
-            await bot.send_message(row["id"], f"📢 *Broadcast:*\n{text}", parse_mode="Markdown")
+            await bot.send_message(uid, f"📢 *Broadcast:*\n{text}", parse_mode="Markdown")
             success += 1
-        except Exception:
-            pass
-    await message.answer(f"✅ Broadcast sent to {success}/{len(rows)} users.")
+            await asyncio.sleep(0.05) # 20 msg/sec limit
+        except Exception as e:
+            logger.error("Failed to send broadcast to %s: %s", uid, e)
+            failed += 1
+    await message.answer(f"✅ Broadcast finished.\nSent: {success}\nFailed: {failed}")
 
 
 # ─── Stats & Logs ─────────────────────────────────────────────────────────────

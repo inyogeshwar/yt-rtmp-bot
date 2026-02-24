@@ -156,22 +156,32 @@ async def handle_url(message: Message) -> None:
     if is_direct_url(url):
         status = await message.answer("⬇️ Downloading from URL…")
         import aiohttp
+        import time
         try:
             filename = Path(url.split("?")[0]).name or "download"
             dest = DOWNLOADS_PATH / filename
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=3600, connect=30, sock_read=300)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url) as resp:
+                    if resp.status >= 400:
+                        await status.edit_text(f"❌ Download failed: HTTP {resp.status}")
+                        return
                     total = int(resp.headers.get("Content-Length", 0))
                     downloaded = 0
+                    last_pct = -1
+                    last_edit = 0
                     with open(dest, "wb") as f:
                         async for chunk in resp.content.iter_chunked(1024 * 512):
                             f.write(chunk)
                             downloaded += len(chunk)
                             if total:
                                 pct = int(downloaded / total * 100)
-                                if pct % 20 == 0:
+                                now = time.monotonic()
+                                if pct != last_pct and (pct // 20 != last_pct // 20 or now - last_edit > 5):
                                     try:
                                         await status.edit_text(f"⬇️ {pct}%…")
+                                        last_pct = pct
+                                        last_edit = now
                                     except Exception:
                                         pass
             await _db.set_setting(f"last_file_{uid}", str(dest))

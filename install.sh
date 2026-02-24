@@ -18,7 +18,7 @@ info "Installing system packages…"
 apt-get install -y --no-install-recommends \
     python3.11 python3.11-venv python3-pip \
     ffmpeg \
-    git curl wget ca-certificates
+    git curl wget ca-certificates rsync
 
 ffmpeg -version | head -1 || error "FFmpeg installation failed"
 ffprobe -version | head -1 || error "FFprobe not found"

@@ -86,6 +86,47 @@ class StreamManager:
         logger.info("Stream started: %s", session_id)
         return sess
 
+    async def start_playlist(
+        self,
+        session_id: str,
+        user_id: int,
+        playlist: List[str],
+        rtmp_url: str,
+        stream_key: str,
+        quality: int = 720,
+        vbitrate: str = "",
+        abitrate: str = "128k",
+        loop: bool = False,
+        notify_cb: Optional[Callable] = None,
+    ) -> Session:
+        proc = await _ff.start_playlist_stream(
+            playlist=playlist,
+            rtmp_url=rtmp_url,
+            stream_key=stream_key,
+            quality=quality,
+            vbitrate=vbitrate,
+            abitrate=abitrate,
+            loop=loop,
+        )
+        sess = Session(
+            session_id=session_id,
+            user_id=user_id,
+            process=proc,
+            input_path=";".join(playlist[:3]) + "...", # Summarized
+            rtmp_url=rtmp_url,
+            stream_key=stream_key,
+            quality=quality,
+            vbitrate=vbitrate,
+            abitrate=abitrate,
+            loop=loop,
+            notify_cb=notify_cb,
+        )
+        self._sessions[session_id] = sess
+        await _db.update_session_status(session_id, "running")
+        sess._monitor_task = asyncio.create_task(self._monitor(sess))
+        logger.info("Playlist stream started: %s", session_id)
+        return sess
+
     async def stop(self, session_id: str) -> bool:
         sess = self._sessions.get(session_id)
         if not sess:

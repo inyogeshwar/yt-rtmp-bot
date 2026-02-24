@@ -51,15 +51,27 @@ async def cmd_start_stream(message: Message, command: CommandObject, is_admin: b
 
     # Resolve file: argument OR last queued file from DB setting
     file_path_str = args[0] if args else await _db.get_setting(f"last_file_{uid}")
-    if not file_path_str or not Path(file_path_str).exists():
+    if not file_path_str:
         await message.answer(
             "⚠️ No file queued. Send a video/audio file first, or specify the path:\n"
-            "`/start_stream /path/to/file.mp4`",
+            "`/start_stream path/to/file.mp4`",
             parse_mode="Markdown",
         )
         return
 
-    rtmp_cfg = await _db.get_rtmp(uid)
+    # Security: Validate path is within STORAGE_PATH to prevent traversal
+    from config import STORAGE_PATH
+    try:
+        candidate = Path(file_path_str).resolve()
+        base      = STORAGE_PATH.resolve()
+        if not candidate.is_relative_to(base) or not candidate.is_file():
+            await message.answer("⛔ Invalid file path or access denied.")
+            return
+    except Exception:
+        await message.answer("⚠️ Path resolution failed.")
+        return
+
+    file_path = candidate
     if not rtmp_cfg:
         await message.answer("⚠️ No RTMP config. Use /set\\_rtmp first.", parse_mode="Markdown")
         return

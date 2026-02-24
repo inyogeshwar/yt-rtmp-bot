@@ -36,14 +36,18 @@ def _build_rtmp_url(rtmp_url: str, stream_key: str) -> str:
 
 # ─── Low-level async runner ───────────────────────────────────────────────────
 
-async def run_ffmpeg(args: List[str]) -> asyncio.subprocess.Process:
+async def run_ffmpeg(
+    args: List[str],
+    stdout=asyncio.subprocess.PIPE,
+    stderr=asyncio.subprocess.PIPE
+) -> asyncio.subprocess.Process:
     """Start an ffmpeg process and return it (caller manages it)."""
     cmd = [FFMPEG_PATH, "-hide_banner", "-loglevel", "warning"] + args
     logger.debug("FFmpeg command: %s", " ".join(shlex.quote(a) for a in cmd))
     return await asyncio.create_subprocess_exec(
         *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        stdout=stdout,
+        stderr=stderr,
     )
 
 
@@ -224,7 +228,8 @@ async def start_rtmp_stream(
 ) -> asyncio.subprocess.Process:
     """Start an RTMP stream; returns the running process."""
     args = build_stream_args(input_path, rtmp_url, stream_key, quality, vbitrate, abitrate, loop)
-    return await run_ffmpeg(args)
+    # Use DEVNULL for stderr to avoid deadlocks on long-lived streams
+    return await run_ffmpeg(args, stderr=asyncio.subprocess.DEVNULL)
 
 
 async def start_playlist_stream(
@@ -237,8 +242,10 @@ async def start_playlist_stream(
     loop: bool = False,
 ) -> asyncio.subprocess.Process:
     """Stream a list of files sequentially using ffmpeg concat demuxer."""
-    # Write a concat list file
-    concat_file = DOWNLOADS_PATH / "concat_list.txt"
+    # Write a unique concat list file to avoid race conditions
+    import uuid
+    uid = str(uuid.uuid4())[:8]
+    concat_file = DOWNLOADS_PATH / f"concat_{uid}.txt"
     content = "\n".join(f"file '{p}'" for p in playlist)
     concat_file.write_text(content)
 
@@ -260,4 +267,4 @@ async def start_playlist_stream(
             dest,
         ]
     )
-    return await run_ffmpeg(args)
+    return await run_ffmpeg(args, stderr=asyncio.subprocess.DEVNULL)
