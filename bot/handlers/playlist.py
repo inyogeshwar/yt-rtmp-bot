@@ -86,13 +86,27 @@ async def cmd_add(message: Message, command: CommandObject) -> None:
 
 
 @router.message(Command("remove"))
-async def cmd_remove(message: Message, command: CommandObject) -> None:
+async def cmd_remove(message: Message, command: CommandObject, is_admin: bool = False) -> None:
     args = (command.args or "").strip()
     if not args.isdigit():
         await message.answer("Usage: `/remove item_id`", parse_mode="Markdown")
         return
-    await _db.playlist_remove(int(args))
-    await message.answer(f"🗑️ Item `{args}` removed.", parse_mode="Markdown")
+    
+    item_id = int(args)
+    item = await _db.playlist_get_item(item_id)
+    if not item:
+        await message.answer("⚠️ Item not found.")
+        return
+
+    # Security check: must be owner of the session or admin
+    if not is_admin:
+        session = await _db.get_session(item["session_id"])
+        if not session or session["user_id"] != message.from_user.id:
+            await message.answer("⛔ Access denied.")
+            return
+
+    await _db.playlist_remove(item_id)
+    await message.answer(f"🗑️ Item `{item_id}` removed.", parse_mode="Markdown")
 
 
 @router.message(Command("list"))
@@ -171,22 +185,10 @@ async def cmd_playlist_stream(message: Message, is_admin: bool = False) -> None:
             pass
 
     try:
-        from bot.services.ffmpeg_service import start_playlist_stream
-        proc = await start_playlist_stream(
-            playlist=paths,
-            rtmp_url=rtmp_cfg["rtmp_url"],
-            stream_key=rtmp_cfg["stream_key"],
-            quality=quality,
-            vbitrate=vbitrate,
-            loop=loop,
-        )
-        # Store process in stream_manager manually
-        from bot.services.stream_manager import Session
-        sess = Session(
+        await stream_manager.start_playlist(
             session_id=session_id,
             user_id=uid,
-            process=proc,
-            input_path=paths[0],
+            playlist=paths,
             rtmp_url=rtmp_cfg["rtmp_url"],
             stream_key=rtmp_cfg["stream_key"],
             quality=quality,
@@ -195,10 +197,6 @@ async def cmd_playlist_stream(message: Message, is_admin: bool = False) -> None:
             loop=loop,
             notify_cb=notify,
         )
-        stream_manager._sessions[session_id] = sess
-        await _db.update_session_status(session_id, "running")
-        import asyncio
-        sess._monitor_task = asyncio.create_task(stream_manager._monitor(sess))
 
         await status.edit_text(
             f"🟢 *Playlist stream started!*\n"
@@ -208,4 +206,5 @@ async def cmd_playlist_stream(message: Message, is_admin: bool = False) -> None:
             parse_mode="Markdown",
         )
     except Exception as exc:
+        await status.edit_text(f"❌ Failed to start playlist stream: {exc}")
         await status.edit_text(f"❌ Failed: {exc}")

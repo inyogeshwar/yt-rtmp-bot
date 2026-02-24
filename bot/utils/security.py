@@ -7,6 +7,7 @@ import base64
 import hashlib
 from typing import Union
 
+from cryptography.fernet import Fernet
 from aiogram.types import Message, CallbackQuery
 
 from config import ADMIN_IDS
@@ -31,15 +32,28 @@ def mask_key(key: str, visible: int = 4) -> str:
 
 
 def simple_encrypt(text: str, secret: str) -> str:
-    """Very lightweight XOR+base64 obfuscation for DB storage."""
-    key_bytes = hashlib.sha256(secret.encode()).digest()
-    data      = text.encode()
-    enc       = bytes(b ^ key_bytes[i % 32] for i, b in enumerate(data))
-    return base64.urlsafe_b64encode(enc).decode()
+    """Authenticated encryption for DB storage using Fernet."""
+    # Derive a compatible 32-byte key from the secret
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+    f = Fernet(key)
+    return f.encrypt(text.encode()).decode()
 
 
 def simple_decrypt(token: str, secret: str) -> str:
-    key_bytes = hashlib.sha256(secret.encode()).digest()
-    data      = base64.urlsafe_b64decode(token.encode())
-    dec       = bytes(b ^ key_bytes[i % 32] for i, b in enumerate(data))
-    return dec.decode()
+    """Decrypt a token using the same secret/key (with XOR fallback)."""
+    # 1. Try Fernet
+    try:
+        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+        f = Fernet(key)
+        return f.decrypt(token.encode()).decode()
+    except Exception:
+        pass
+
+    # 2. Try legacy XOR
+    try:
+        key_bytes = hashlib.sha256(secret.encode()).digest()
+        data      = base64.urlsafe_b64decode(token.encode())
+        dec       = bytes(b ^ key_bytes[i % 32] for i, b in enumerate(data))
+        return dec.decode()
+    except Exception:
+        return token # Likely plain text or corrupted

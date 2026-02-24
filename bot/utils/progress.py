@@ -28,8 +28,14 @@ class ProgressTracker:
             return
         pct  = int(current / total * 100)
         now  = time.monotonic()
-        if pct == self._last_pct and now - self._last_edit < self.MIN_UPDATE_INTERVAL:
+        
+        # Throttle by time (min interval) but always allow 100%
+        if pct != 100 and now - self._last_edit < self.MIN_UPDATE_INTERVAL:
             return
+        # Skip if percentage hasn't changed (unless final 100%)
+        if pct == self._last_pct and pct != 100:
+            return
+
         self._last_pct  = pct
         self._last_edit = now
         bar = _build_bar(pct)

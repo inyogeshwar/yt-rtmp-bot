@@ -20,7 +20,7 @@ import re
 from pathlib import Path
 
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile
 
 from bot.database import db as _db
 from bot.services import file_detector, ffmpeg_service as _ff
@@ -46,15 +46,8 @@ async def handle_keyword(message: Message, is_admin: bool = False) -> None:
     keyword = message.text.strip()
     uid     = message.from_user.id
 
-    # Try to resolve file from replied message or last queued
-    replied = message.reply_to_message
-    file_path_str: str | None = None
-
-    if replied:
-        file_path_str = await _db.get_setting(f"last_file_{uid}")
-
-    if not file_path_str:
-        file_path_str = await _db.get_setting(f"last_file_{uid}")
+    # Resolve file: try last queued from DB setting
+    file_path_str = await _db.get_setting(f"last_file_{uid}")
 
     if not file_path_str or not Path(file_path_str).exists():
         # No file to act on – let other handlers process it
@@ -144,7 +137,7 @@ async def handle_keyword(message: Message, is_admin: bool = False) -> None:
         try:
             out = await _ff.convert_to_mp3(str(file_path))
             await status.edit_text(f"✅ `{out.name}`", parse_mode="Markdown")
-            await message.answer_audio(audio=out.open("rb"), title=out.stem)
+            await message.answer_audio(audio=FSInputFile(out), title=out.stem)
         except Exception as exc:
             await status.edit_text(f"❌ {exc}")
         return
@@ -186,7 +179,7 @@ async def handle_keyword(message: Message, is_admin: bool = False) -> None:
         try:
             out = await _ff.extract_thumbnail(str(file_path))
             await status.delete()
-            await message.answer_photo(photo=out.open("rb"), caption=f"🖼️ `{file_path.name}`", parse_mode="Markdown")
+            await message.answer_photo(photo=FSInputFile(out), caption=f"🖼️ `{file_path.name}`", parse_mode="Markdown")
         except Exception as exc:
             await status.edit_text(f"❌ {exc}")
         return

@@ -18,13 +18,16 @@ async def init_db() -> None:
     global _DB
     _DB = await aiosqlite.connect(str(DATABASE_PATH))
     _DB.row_factory = aiosqlite.Row
+    await _DB.execute("PRAGMA foreign_keys=ON;")
     await _DB.executescript(SCHEMA)
     await _DB.commit()
 
 
 async def close_db() -> None:
+    global _DB
     if _DB:
         await _DB.close()
+        _DB = None
 
 
 def get_db() -> aiosqlite.Connection:
@@ -118,10 +121,14 @@ async def create_session(user_id: int, rtmp_url: str, stream_key: str, **kwargs)
 
 async def update_session_status(session_id: str, status: str) -> None:
     db = get_db()
-    ts_field = "started_at" if status == "running" else "stopped_at" if status in ("stopped", "crashed") else None
-    if ts_field:
+    if status == "running":
         await db.execute(
-            f"UPDATE stream_sessions SET status=?, {ts_field}=datetime('now') WHERE id=?",
+            "UPDATE stream_sessions SET status=?, started_at=datetime('now') WHERE id=?",
+            (status, session_id),
+        )
+    elif status in ("stopped", "crashed"):
+        await db.execute(
+            "UPDATE stream_sessions SET status=?, stopped_at=datetime('now') WHERE id=?",
             (status, session_id),
         )
     else:
@@ -175,6 +182,13 @@ async def playlist_remove(item_id: int) -> None:
     db = get_db()
     await db.execute("DELETE FROM playlist WHERE id = ?", (item_id,))
     await db.commit()
+
+
+async def playlist_get_item(item_id: int) -> Optional[Dict]:
+    db = get_db()
+    async with db.execute("SELECT * FROM playlist WHERE id = ?", (item_id,)) as cur:
+        row = await cur.fetchone()
+    return dict(row) if row else None
 
 
 async def playlist_list(session_id: str) -> List[Dict]:

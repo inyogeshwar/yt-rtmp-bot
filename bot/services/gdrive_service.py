@@ -51,8 +51,13 @@ async def download_gdrive(
     direct_url = _GDRIVE_DIRECT_URL.format(file_id=file_id)
     output_path = DOWNLOADS_PATH / (filename or f"gdrive_{file_id}")
 
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=3600, connect=30, sock_read=300)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(direct_url, allow_redirects=True) as resp:
+            if resp.status >= 400:
+                logger.error("GDrive error: HTTP %d", resp.status)
+                return None
+
             # Handle large-file virus scan warning page
             if "text/html" in resp.content_type:
                 html = await resp.text()
@@ -64,6 +69,9 @@ async def download_gdrive(
                         f"&id={file_id}&confirm={confirm_token}"
                     )
                     async with session.get(download_url, allow_redirects=True) as resp2:
+                        if resp2.status >= 400:
+                            logger.error("GDrive download error: HTTP %d", resp2.status)
+                            return None
                         return await _write_response(resp2, output_path, progress_cb)
                 else:
                     logger.error("GDrive returned HTML – file may not be publicly accessible.")
@@ -88,6 +96,9 @@ async def _write_response(
     total = int(resp.headers.get("Content-Length", 0))
     downloaded = 0
     chunk_size = 1024 * 512  # 512 KB
+    last_pct = -1
+    import time
+    last_edit = 0
 
     with open(output_path, "wb") as f:
         async for chunk in resp.content.iter_chunked(chunk_size):
@@ -95,8 +106,11 @@ async def _write_response(
             downloaded += len(chunk)
             if progress_cb and total:
                 pct = int(downloaded / total * 100)
-                if pct % 10 == 0:
+                now = time.monotonic()
+                if pct != last_pct and now - last_edit > 3:
                     progress_cb(f"⬇️ GDrive: {pct}% ({downloaded // (1024*1024)} MB)")
+                    last_pct = pct
+                    last_edit = now
 
     logger.info("GDrive download complete: %s", output_path)
     return output_path

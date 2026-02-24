@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 
 def _make_progress_hook(callback: Optional[Callable] = None):
     """Return a yt-dlp progress hook that calls an async-safe callback."""
+    # Capture the running event loop in the async context
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+
     def hook(d: dict):
         if callback is None:
             return
@@ -29,11 +35,11 @@ def _make_progress_hook(callback: Optional[Callable] = None):
             pct = d.get("_percent_str", "?%").strip()
             speed = d.get("_speed_str", "?/s").strip()
             eta = d.get("_eta_str", "?").strip()
-            asyncio.get_event_loop().call_soon_threadsafe(
+            loop.call_soon_threadsafe(
                 callback, f"⬇️ {pct}  •  {speed}  •  ETA {eta}"
             )
         elif d["status"] == "finished":
-            asyncio.get_event_loop().call_soon_threadsafe(callback, "✅ Download finished, processing…")
+            loop.call_soon_threadsafe(callback, "✅ Download finished, processing…")
     return hook
 
 

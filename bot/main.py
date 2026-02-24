@@ -102,8 +102,8 @@ async def main() -> None:
     bot = create_bot()
     dp  = create_dispatcher()
 
-    dp.startup.register(lambda: on_startup(bot))
-    dp.shutdown.register(lambda: on_shutdown(bot))
+    dp.startup.register(lambda *a, **kw: on_startup(bot))
+    dp.shutdown.register(lambda *a, **kw: on_shutdown(bot))
 
     # Graceful shutdown on SIGTERM / SIGINT
     loop = asyncio.get_event_loop()
