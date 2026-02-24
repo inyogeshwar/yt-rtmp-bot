@@ -122,8 +122,8 @@ async def download_playlist(
     """Download an entire YouTube playlist."""
     opts = {
         "outtmpl": str(DOWNLOADS_PATH / "%(playlist_index)s - %(title)s.%(ext)s"),
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "merge_output_format": "mp4",
+        "format": f"bestvideo[ext={fmt}]+bestaudio[ext=m4a]/best[ext={fmt}]/best",
+        "merge_output_format": fmt,
         "progress_hooks": [_make_progress_hook(progress_cb)],
         "quiet": True,
         "noplaylist": False,

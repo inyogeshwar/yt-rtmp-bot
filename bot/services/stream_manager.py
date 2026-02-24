@@ -31,6 +31,7 @@ class Session:
     vbitrate: str
     abitrate: str
     loop: bool
+    playlist: Optional[List[str]] = None
     status: str = "running"          # running | paused | stopped
     restart_count: int = 0
     notify_cb: Optional[Callable]  = None   # async callback(session_id, msg)
@@ -119,6 +120,7 @@ class StreamManager:
             vbitrate=vbitrate,
             abitrate=abitrate,
             loop=loop,
+            playlist=playlist,
             notify_cb=notify_cb,
         )
         self._sessions[session_id] = sess
@@ -229,15 +231,26 @@ class StreamManager:
             )
         await asyncio.sleep(5)
         try:
-            proc = await _ff.start_rtmp_stream(
-                input_path=sess.input_path,
-                rtmp_url=sess.rtmp_url,
-                stream_key=sess.stream_key,
-                quality=sess.quality,
-                vbitrate=sess.vbitrate,
-                abitrate=sess.abitrate,
-                loop=sess.loop,
-            )
+            if sess.playlist:
+                proc = await _ff.start_playlist_stream(
+                    playlist=sess.playlist,
+                    rtmp_url=sess.rtmp_url,
+                    stream_key=sess.stream_key,
+                    quality=sess.quality,
+                    vbitrate=sess.vbitrate,
+                    abitrate=sess.abitrate,
+                    loop=sess.loop,
+                )
+            else:
+                proc = await _ff.start_rtmp_stream(
+                    input_path=sess.input_path,
+                    rtmp_url=sess.rtmp_url,
+                    stream_key=sess.stream_key,
+                    quality=sess.quality,
+                    vbitrate=sess.vbitrate,
+                    abitrate=sess.abitrate,
+                    loop=sess.loop,
+                )
             sess.process = proc
             sess.status  = "running"
             await _db.update_session_status(sess.session_id, "running")

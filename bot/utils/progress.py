@@ -11,6 +11,7 @@ import time
 from typing import Optional
 
 from aiogram.types import Message
+from bot.utils.helpers import human_size
 
 
 class ProgressTracker:
@@ -39,7 +40,7 @@ class ProgressTracker:
         self._last_pct  = pct
         self._last_edit = now
         bar = _build_bar(pct)
-        size_str = _human(current) + " / " + _human(total)
+        size_str = human_size(current) + " / " + human_size(total)
         text = f"{self._prefix}\n{bar} {pct}%\n{size_str}"
         try:
             await self._msg.edit_text(text)
@@ -56,11 +57,3 @@ class ProgressTracker:
 def _build_bar(pct: int, width: int = 20) -> str:
     filled = int(width * pct / 100)
     return "█" * filled + "░" * (width - filled)
-
-
-def _human(n: int) -> str:
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}"
-        n //= 1024
-    return f"{n:.1f} TB"

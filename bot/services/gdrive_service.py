@@ -100,6 +100,9 @@ async def _write_response(
     import time
     last_edit = 0
 
+    # Ensure parent directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     with open(output_path, "wb") as f:
         async for chunk in resp.content.iter_chunked(chunk_size):
             f.write(chunk)
