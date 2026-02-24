@@ -100,7 +100,7 @@ async def cmd_start_stream(message: Message, command: CommandObject, is_admin: b
         await _notify_user(bot, user_id, text)
 
     try:
-        sess = await stream_manager.start(
+        await stream_manager.start(
             session_id=session_id,
             user_id=uid,
             input_path=str(file_path),

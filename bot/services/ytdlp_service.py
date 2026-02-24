@@ -23,10 +23,7 @@ logger = logging.getLogger(__name__)
 def _make_progress_hook(callback: Optional[Callable] = None):
     """Return a yt-dlp progress hook that calls an async-safe callback."""
     # Capture the running event loop in the async context
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def hook(d: dict):
         if callback is None:
@@ -77,7 +74,13 @@ async def download_best(
         "noplaylist": True,
     }
     infos = await _run_ytdlp(opts, url)
-    return [Path(i["requested_downloads"][0]["filepath"]) for i in infos if "requested_downloads" in i]
+    paths = []
+    for i in infos:
+        rds = i.get("requested_downloads", [{}])
+        fp  = rds[0].get("filepath", "") if rds else ""
+        if fp and Path(fp).exists():
+            paths.append(Path(fp))
+    return paths
 
 
 async def download_mp3(
@@ -150,10 +153,11 @@ async def get_info(url: str) -> Optional[Dict]:
 
     try:
         info = await loop.run_in_executor(None, _fetch)
-        return info
-    except Exception as e:
-        logger.error("yt-dlp info error: %s", e)
+    except Exception:
+        logger.exception("yt-dlp info error for URL: %s", url)
         return None
+    else:
+        return info
 
 
 async def download_format(

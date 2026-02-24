@@ -89,24 +89,29 @@ async def handle_keyword(message: Message, is_admin: bool = False) -> None:
                 "⚠️ Video has no audio track. Streaming anyway (silent)."
             )
 
-        session_id = await _db.create_session(
-            user_id=uid,
-            rtmp_url=rtmp_cfg["rtmp_url"],
-            stream_key=rtmp_cfg["stream_key"],
-            quality=quality,
-            vbitrate=vbitrate,
-            abitrate=DEFAULT_AUDIO_BITRATE,
-            loop_mode=loop,
-            title=file_path.name,
-        )
+        try:
+            session_id = await _db.create_session(
+                user_id=uid,
+                rtmp_url=rtmp_cfg["rtmp_url"],
+                stream_key=rtmp_cfg["stream_key"],
+                quality=quality,
+                vbitrate=vbitrate,
+                abitrate=DEFAULT_AUDIO_BITRATE,
+                loop_mode=loop,
+                title=file_path.name,
+            )
+        except Exception as exc:
+            logger.exception("Failed to create session in DB")
+            await message.answer(f"❌ Database error: {exc}")
+            return
 
         bot = message.bot
 
         async def notify(user_id: int, text: str) -> None:
             try:
                 await bot.send_message(user_id, text, parse_mode="Markdown")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Failed to send notification to %s: %s", user_id, e, exc_info=True)
 
         try:
             await stream_manager.start(
@@ -203,7 +208,19 @@ async def handle_keyword(message: Message, is_admin: bool = False) -> None:
         if not sessions:
             await message.answer("ℹ️ No active streams.")
             return
+        
+        success = 0
+        failed = []
         for sess in sessions:
-            await stream_manager.stop(sess.session_id)
-        await message.answer(f"🔴 Stopped {len(sessions)} stream(s).")
+            try:
+                await stream_manager.stop(sess.session_id)
+                success += 1
+            except Exception as e:
+                logger.error("Failed to stop session %s: %s", sess.session_id, e)
+                failed.append(sess.session_id[:8])
+        
+        res = f"🔴 Stopped {success} stream(s)."
+        if failed:
+            res += f"\n⚠️ Failed to stop: {', '.join(failed)}"
+        await message.answer(res)
         return

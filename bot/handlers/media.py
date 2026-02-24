@@ -35,6 +35,7 @@ router = Router(name="media")
 
 async def _save_telegram_file(message: Message, file_id: str, filename: str) -> Path:
     """Download a Telegram file with a progress bar."""
+    DOWNLOADS_PATH.mkdir(parents=True, exist_ok=True)
     dest = DOWNLOADS_PATH / filename
     status_msg = await message.answer(f"⬇️ Downloading `{filename}`…", parse_mode="Markdown")
     tracker = ProgressTracker(status_msg, prefix=f"⬇️ `{filename}`")
@@ -160,6 +161,7 @@ async def handle_url(message: Message) -> None:
         import time
         try:
             filename = Path(url.split("?")[0]).name or "download"
+            DOWNLOADS_PATH.mkdir(parents=True, exist_ok=True)
             dest = DOWNLOADS_PATH / filename
             timeout = aiohttp.ClientTimeout(total=3600, connect=30, sock_read=300)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -196,7 +198,7 @@ async def handle_url(message: Message) -> None:
 # ─── FFmpeg processing commands ───────────────────────────────────────────────
 
 @router.message(Command("convert_mp4"))
-async def cmd_convert_mp4(message: Message, command: CommandObject) -> None:
+async def cmd_convert_mp4(message: Message, _command: CommandObject) -> None:
     uid = message.from_user.id
     src = await _db.get_setting(f"last_file_{uid}")
     if not src or not Path(src).exists():

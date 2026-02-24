@@ -8,6 +8,11 @@ info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error() { echo -e "${RED}[ERR]${NC}   $*"; exit 1; }
 
+# Root privilege guard
+if [[ $EUID -ne 0 ]]; then
+   error "This script must be run as root (use sudo)."
+fi
+
 info "=== Advanced Telegram Media Streaming Bot – Installer ==="
 
 # ── System dependencies ───────────────────────────────────────────────────────
